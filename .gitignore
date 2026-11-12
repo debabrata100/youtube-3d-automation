@@ -1,0 +1,12 @@
+.env
+.env.*
+!.env.example
+node_modules/
+dist/
+__pycache__/
+*.pyc
+.DS_Store
+jobs/
+assets/characters/*.blend*
+assets/characters/*.fbx
+assets/characters/*.glb

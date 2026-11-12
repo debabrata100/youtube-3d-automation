@@ -1,0 +1,2 @@
+export const character = {durationSeconds:5,fps:24,resolution:{width:1280,height:720},character:{assetId:'demo-character-v1',actions:[{name:'walk',startFrame:1,endFrame:72,startPosition:[-3,0,0],endPosition:[0,0,0]},{name:'wave',startFrame:73,endFrame:120}]},environment:{type:'simple-ground',color:'green'}};
+export const ball = {durationSeconds:5,fps:24,resolution:{width:1280,height:720},ball:{color:'blue',startX:-3,endX:3,radius:.6},floor:{color:'gray'}};
