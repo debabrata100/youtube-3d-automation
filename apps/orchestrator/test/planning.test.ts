@@ -25,7 +25,7 @@ const llmCharacter = {
 
 // Conservative guard for the documented strict subset used by this schema.
 // It rejects unknown keywords rather than pretending to validate arbitrary schemas.
-function assertStrictSubset(schema: unknown, root = true, document = schema as Record<string, any>): void {
+export function assertStrictSubset(schema: unknown, root = true, document = schema as Record<string, any>): void {
   assert.ok(schema && typeof schema === 'object' && !Array.isArray(schema));
   const s = schema as Record<string, any>;
   const allowed = new Set(['$schema', 'title', 'description', 'type', 'properties', 'required', 'additionalProperties',
@@ -130,3 +130,5 @@ for (const [name, output, expected] of [
     assert.equal(requests, 1);
   });
 }
+
+test('mascot LLM schema remains strict-compatible',()=>{assertStrictSubset(toJsonSchema(LLMSceneSchema));});

@@ -1,0 +1,28 @@
+{
+  "adapter": "wolf-native-controller-v1",
+  "forwardAxis": "-Y",
+  "upAxis": "Z",
+  "nativeWalkCycleFrames": 31,
+  "rightArmControls": [
+    "FK_UpperArm.R",
+    "FK_Forearm.R",
+    "FK_Hand.R"
+  ],
+  "waveOffsetsRadians": {
+    "forearmX": 1.2,
+    "handZAmplitude": 0.35,
+    "upperArmXYZ": [
+      2.3,
+      -1.1,
+      1.1
+    ]
+  },
+  "footControls": [
+    "Foot.L",
+    "Foot.R"
+  ],
+  "footContactHeightBandMeters": 0.045,
+  "targetHeightMeters": 2.8,
+  "reviewOnly": true,
+  "retargetingImplemented": false
+}

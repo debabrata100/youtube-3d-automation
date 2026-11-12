@@ -1,0 +1,24 @@
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import {readFile,stat} from 'node:fs/promises';
+import path from 'node:path';
+import {createHash} from 'node:crypto';
+import {SceneSchema} from '../src/schemas/scene.js';
+import {verifyVideo} from '../src/utils/verifyVideo.js';
+import {ROOT,BLENDER} from '../src/utils/paths.js';
+import {runCommand} from '../src/utils/runCommand.js';
+test('wolf controller rendered artifacts and Blender save/reload verification',async()=>{
+ const job=process.env.WOLF_MOTION_JOB;assert.ok(job,'Run wolf:motion-review and set WOLF_MOTION_JOB');
+ const report=JSON.parse(await readFile(path.join(job,'animation-report.json'),'utf8'));
+ assert.equal(report.status,'verified_pending_human_visual_review');assert.equal(report.motion.displacementMeters,3);
+ assert.deepEqual(report.motion.finalPosition,[1.5,0,0]);assert.ok(Math.abs(report.motion.finalHeadingRadians-Math.atan2(-1.5,10))<.001);
+ assert.ok(report.wave.handLiftMeters>.3 && report.wave.oppositeArmUnchanged && report.wave.meshDifference.rms>.01);
+ assert.equal(report.wave.cycles,3);assert.ok(report.footContact.improved);assert.equal(report.footContact.footLockingImplemented,false);
+ assert.ok(report.floor.minimum>=.014 && report.camera.fullBodyAllFramesChecked);
+ assert.ok(report.savedSceneReloadVerified);assert.ok(report.previews.length>=12);
+ for(const image of report.previews)assert.ok((await stat(image)).size>0);
+ const plan=SceneSchema.parse(JSON.parse(await readFile(path.join(job,'plan.json'),'utf8')));
+ await verifyVideo(path.join(job,'output/animation.mp4'),plan);
+ assert.equal(createHash('sha256').update(await readFile(report.source)).digest('hex'),report.sourceSha256);
+ await runCommand(BLENDER,['--background','--factory-startup','--disable-autoexec',path.join(job,'scene.blend'),'--python-exit-code','1','--python',path.join(ROOT,'workers/blender/test_controller.py'),'--',job],ROOT);
+});

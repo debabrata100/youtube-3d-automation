@@ -1,0 +1,15 @@
+import {readFile} from 'node:fs/promises';
+import {randomUUID} from 'node:crypto';
+import path from 'node:path';
+import {ROOT,BLENDER} from './utils/paths.js';
+import {controllerScene} from './animation/characterController.js';
+import {ControllerSchema} from './animation/animationSchema.js';
+import {createWorkflow} from './graph/workflow.js';
+import {runCommand} from './utils/runCommand.js';
+const controller=ControllerSchema.parse(JSON.parse(await readFile(path.join(ROOT,'assets/plans/wolf-motion.json'),'utf8')));
+const plan=controllerScene(controller),jobId='wolf-motion-'+randomUUID(),jobDir=path.join(ROOT,'jobs',jobId);
+console.log('Wolf motion review job:',jobDir,'— review-only, license unverified.');
+await createWorkflow(async()=>plan,{wolfMotionReview:true}).invoke({prompt:'Deterministic controller plan',jobId,jobDir,plan:null,asset:null,videoPath:null});
+await runCommand(BLENDER,['--background','--factory-startup','--disable-autoexec',path.join(jobDir,'scene.blend'),'--python-exit-code','1','--python',path.join(ROOT,'workers/blender/character_controller.py'),'--','review',jobDir],ROOT);
+await runCommand(BLENDER,['--background','--factory-startup','--disable-autoexec','--python-exit-code','1','--python',path.join(ROOT,'workers/blender/facial_experiments.py'),'--',jobDir],ROOT);
+console.log('Wolf controller artifacts:',jobDir);

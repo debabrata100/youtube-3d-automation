@@ -1,0 +1,13 @@
+import {readFile} from 'node:fs/promises';
+import {randomUUID} from 'node:crypto';
+import path from 'node:path';
+import {ROOT,BLENDER} from './utils/paths.js';
+import {SceneSchema} from './schemas/scene.js';
+import {createWorkflow} from './graph/workflow.js';
+import {runCommand} from './utils/runCommand.js';
+const plan=SceneSchema.parse(JSON.parse(await readFile(path.join(ROOT,'assets/plans/wolf-native.json'),'utf8')));
+const jobId='wolf-review-'+randomUUID(),jobDir=path.join(ROOT,'jobs',jobId);
+console.log('Wolf review job:',jobDir,'— commercial publishing is not authorized by this test.');
+await createWorkflow(async()=>plan,{wolfReview:true}).invoke({prompt:'Native wolf review',jobId,jobDir,plan:null,asset:null,videoPath:null});
+await runCommand(BLENDER,['--background','--disable-autoexec',path.join(jobDir,'scene.blend'),'--python-exit-code','1','--python',path.join(ROOT,'workers/blender/wolf_native.py'),'--','review',jobDir],ROOT);
+console.log('Wolf video and previews:',jobDir);

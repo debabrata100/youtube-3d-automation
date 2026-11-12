@@ -115,6 +115,10 @@ def build_scene(plan, job_dir):
     background.inputs["Color"].default_value = (0.55, 0.7, 0.9, 1)
     background.inputs["Strength"].default_value = 0.8
 
+    if 'lighting' in plan:
+        from lighting import configure
+        configure(plan)
+
     # IMPORTANT: Configure output BEFORE saving
     frames_dir = job_dir / "frames"
     frames_dir.mkdir(parents=True, exist_ok=True)

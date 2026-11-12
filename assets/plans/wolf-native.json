@@ -1,0 +1,1 @@
+{"durationSeconds":10,"fps":24,"resolution":{"width":1280,"height":720},"character":{"assetId":"wolf-warrior-native","actions":[{"name":"idle","startFrame":1,"endFrame":72},{"name":"walk","startFrame":73,"endFrame":168},{"name":"idle","startFrame":169,"endFrame":240}]},"environment":{"type":"simple-ground","color":"gray"}}

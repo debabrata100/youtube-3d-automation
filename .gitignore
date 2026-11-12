@@ -10,3 +10,7 @@ jobs/
 assets/characters/*.blend*
 assets/characters/*.fbx
 assets/characters/*.glb
+# Proprietary wolf source and associated textures: never include by default.
+assets/characters/wolf-warrior/*
+!assets/characters/wolf-warrior/asset.json
+!assets/characters/wolf-warrior/animation-config.json

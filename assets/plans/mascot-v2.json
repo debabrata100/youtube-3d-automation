@@ -1,0 +1,13 @@
+{
+  "durationSeconds":10,"fps":24,"resolution":{"width":1280,"height":720},
+  "renderMode":"final","lighting":"soft_studio",
+  "character":{"assetId":"mascot-v2","actions":[
+    {"name":"walk","startFrame":1,"endFrame":96,"startPosition":[-3,0,0],"endPosition":[0,0,0],"blendInFrames":6,"blendOutFrames":8},
+    {"name":"look_at","startFrame":97,"endFrame":120,"blendInFrames":6,"blendOutFrames":6},
+    {"name":"wave","startFrame":121,"endFrame":240,"blendInFrames":6,"blendOutFrames":6}
+  ],"expressions":[
+    {"name":"smile","startFrame":100,"endFrame":240,"intensity":0.9},
+    {"name":"blink","startFrame":140,"endFrame":146,"intensity":1},
+    {"name":"blink","startFrame":200,"endFrame":206,"intensity":1}
+  ]},"environment":{"type":"simple-ground","color":"gray"}
+}

@@ -1,10 +1,11 @@
 import { Annotation } from "@langchain/langgraph";
 import type { ScenePlan } from "../schemas/scene.js";
 
+import type { WolfAsset } from "../assets/wolfAsset.js";
 import type { Asset } from "../assets/registry.js";
 
 export const AnimationState = Annotation.Root({
-  asset: Annotation<Asset | null>,
+  asset: Annotation<Asset | WolfAsset | null>,
   prompt: Annotation<string>,
   jobId: Annotation<string>,
   jobDir: Annotation<string>,

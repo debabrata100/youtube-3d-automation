@@ -1,0 +1,7 @@
+{
+  "targetRig":"demo-v1",
+  "armature":"DemoRig",
+  "orientation":{"up":"Z","forward":"-Y"},
+  "boneMap":{"root":"root","torso":"torso","head":"head","arm.L":"arm.L","arm.R":"arm.R","leg.L":"leg.L","leg.R":"leg.R"},
+  "actionMap":{"idle":"demo.idle.v1","walk":"demo.walk.v1","run":"demo.run.v1","jump":"demo.jump.v1","wave":"demo.wave.v1"}
+}

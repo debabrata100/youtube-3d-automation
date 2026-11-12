@@ -1,0 +1,14 @@
+import { randomUUID } from 'node:crypto';
+import { mkdir, writeFile } from 'node:fs/promises';
+import path from 'node:path';
+import { ROOT, BLENDER } from '../utils/paths.js';
+import { runCommand } from '../utils/runCommand.js';
+import { resolveAsset } from './registry.js';
+const id = process.argv[2];
+if (!id) throw new Error('Usage: npm run assets:validate -- asset-id');
+const asset = await resolveAsset(id);
+const directory = path.join(ROOT,'jobs','import-'+randomUUID());
+await mkdir(directory,{recursive:true});
+await writeFile(path.join(directory,'asset.json'),JSON.stringify(asset,null,2));
+await runCommand(BLENDER,['--background','--factory-startup','--disable-autoexec','--python-exit-code','1','--python',path.join(ROOT,'workers/blender/import_asset.py'),'--',path.join(directory,'asset.json'),directory],ROOT);
+console.log('Validated normalized asset and report:',directory);

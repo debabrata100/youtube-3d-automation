@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { BallSchema, CharacterSchema, SceneSchema, type ScenePlan } from './scene.js';
+import { BallSchema, CharacterSchema, MascotSchema, MascotAction, SceneSchema, type ScenePlan } from './scene.js';
 
 // OpenAI's strict subset excludes tuple prefixItems and requires every property.
 // Nullable objects represent optional movement; application tuples stay unchanged.
@@ -18,11 +18,18 @@ const character = CharacterSchema.extend({
   }).strict(),
 }).strict();
 
+const mascot = MascotSchema.extend({
+  character: MascotSchema.shape.character.extend({
+    actions:z.array(MascotAction.extend({startPosition:position.nullable(),endPosition:position.nullable()}).strict()).min(1),
+  }).strict(),
+}).strict();
+
 // Nested anyOf is supported; the response root itself must be an object.
-export const LLMSceneSchema = z.object({ scene: z.union([BallSchema, character]) }).strict();
+export const LLMSceneSchema = z.object({ scene: z.union([BallSchema, character, mascot, z.object({unsupported:z.string()}).strict()]) }).strict();
 
 export function normalizeScenePlan(output: unknown): ScenePlan {
   const { scene } = LLMSceneSchema.parse(output);
+  if ('unsupported' in scene) throw new Error('Unsupported request: '+scene.unsupported);
   if (!('character' in scene)) return SceneSchema.parse(scene);
   const tuple = (p: z.infer<typeof position>): [number, number, number] => [p.x, p.y, p.z];
   return SceneSchema.parse({

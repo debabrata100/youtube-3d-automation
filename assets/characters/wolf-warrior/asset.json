@@ -1,0 +1,8 @@
+{
+  "id":"wolf-warrior-native","name":"Stylized Wolf Warrior","version":"native-phase2",
+  "path":"characters/wolf-warrior/character.blend","armature":"Armature","meshes":["Body"],
+  "bones":["Root","Head","Neck","FK_UpperArm.L","FK_UpperArm.R","FK_Forearm.L","FK_Forearm.R","Foot.L","Foot.R"],
+  "actions":{"idle":"01-Idle(60)","walk":"02-Walk (42)"},
+  "adapter":"wolf-native","reviewOnly":true,
+  "license":{"name":"Unverified proprietary asset","source":"User-supplied local asset; verify original commercial terms before publishing","commercialUse":false}
+}

@@ -1,0 +1,24 @@
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import {readFile,mkdir,writeFile} from 'node:fs/promises';
+import path from 'node:path';
+import {randomUUID} from 'node:crypto';
+import {ROOT,BLENDER} from '../src/utils/paths.js';
+import {runCommand} from '../src/utils/runCommand.js';
+import {inspectCharacter,InspectionConfig} from '../src/assets/inspection.js';
+test('Blender 5.3 procedural blend/GLB/FBX imports and compatibility fixtures', {timeout:180000},async()=>{
+  const directory=path.join(ROOT,'jobs','inspect-tests-'+randomUUID());await mkdir(directory,{recursive:true});
+  await runCommand(BLENDER,['--background','--factory-startup','--disable-autoexec','--python-exit-code','1','--python',path.join(ROOT,'workers/blender/test_inspector.py'),'--',directory],ROOT);
+  const config=InspectionConfig.parse({targetRig:'demo-v1',boneMap:{}});
+  const result=await inspectCharacter(path.join(directory,'original.blend'),config);
+  assert.equal(JSON.parse(await readFile(path.join(result,'compatibility.json'),'utf8')).status,'needs_mapping');
+  const bad=path.join(directory,'corrupt.blend');await writeFile(bad,'not a blend file');
+  const dirsBefore=(await import('node:fs/promises')).readdir;
+  const before=new Set(await dirsBefore(path.join(ROOT,'jobs')));
+  await assert.rejects(inspectCharacter(bad));
+  const after=await dirsBefore(path.join(ROOT,'jobs'));
+  const failed=after.find(name=>name.startsWith('inspect-')&&!before.has(name));
+  assert.ok(failed);
+  const failure=JSON.parse(await readFile(path.join(ROOT,'jobs',failed,'compatibility.json'),'utf8'));
+  assert.equal(failure.status,'import_failed');
+});

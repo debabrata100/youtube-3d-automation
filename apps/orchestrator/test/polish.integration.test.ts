@@ -1,0 +1,21 @@
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import {readFile,stat} from 'node:fs/promises';
+import path from 'node:path';
+import {createHash} from 'node:crypto';
+import {ROOT,BLENDER} from '../src/utils/paths.js';
+import {runCommand} from '../src/utils/runCommand.js';
+import {SceneSchema} from '../src/schemas/scene.js';
+import {verifyVideo} from '../src/utils/verifyVideo.js';
+test('polished video, paired metrics, camera shots, gesture and saved rig',async()=>{
+ const job=process.env.WOLF_POLISH_JOB;assert.ok(job,'Run wolf:polish-review and set WOLF_POLISH_JOB');
+ const report=JSON.parse(await readFile(path.join(job,'animation-report.json'),'utf8'));
+ assert.equal(report.status,'verified_pending_human_visual_review');assert.equal(report.reviewOnly,true);assert.equal(report.productionPublishingAllowed,false);
+ assert.equal(report.wave.action,'Wolf.Controller.Wave.v2');assert.equal(report.wave.cycles,2);assert.ok(report.wave.returnToIdleVerifiedDelta.max<1e-5);
+ assert.equal(report.motion.displacementMeters,3);assert.ok(report.floor.minimum>=.014);
+ assert.ok((await stat(path.join(job,'contact-sheet.png'))).size>0);
+ assert.equal(report.contactSheetFrames.length,12);
+ assert.equal(createHash('sha256').update(await readFile(report.source)).digest('hex'),report.sourceSha256);
+ await verifyVideo(path.join(job,'output/animation.mp4'),SceneSchema.parse(JSON.parse(await readFile(path.join(job,'plan.json'),'utf8'))));
+ await runCommand(BLENDER,['--background','--factory-startup','--disable-autoexec',path.join(job,'scene.blend'),'--python-exit-code','1','--python',path.join(ROOT,'workers/blender/test_polish.py'),'--',job],ROOT);
+});

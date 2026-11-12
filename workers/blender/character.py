@@ -80,6 +80,7 @@ def generate(destination):
     for bone in rig.pose.bones:
         bone.rotation_euler = (0,0,0)
         bone.location = (0,0,0)
+    if destination is None: return
     destination = Path(destination)
     destination.parent.mkdir(parents=True,exist_ok=True)
     bpy.ops.wm.save_as_mainfile(filepath=str(destination))
@@ -104,9 +105,26 @@ def load(asset):
     rigs = [o for o in objects if o.type == 'ARMATURE' and o.name == asset['armature']]
     if len(rigs) != 1: raise ValueError('Expected registered armature: '+asset['armature'])
     rig = rigs[0]
+    imported_meshes = [o for o in objects if o.type == 'MESH']
+    if not imported_meshes: raise ValueError('Imported character has no meshes')
+    if not any(any(m.type=='ARMATURE' and m.object==rig for m in o.modifiers) or (o.parent==rig and o.parent_type=='BONE') for o in imported_meshes):
+        raise ValueError('No mesh is bound to the registered armature')
+    if asset.get('rigDefinition')=='mascot-v2':
+        required={'face.mouth','face.brow.L','face.brow.R','face.eye.L','face.eye.R','face.pupil.L','face.pupil.R'}
+        missing=required-set(rig.pose.bones.keys())
+        if missing: raise ValueError('Missing mascot-v2 facial bones: '+str(sorted(missing)))
+    missing_meshes = set(asset.get('meshes',[])) - {o.name for o in imported_meshes}
+    if missing_meshes: raise ValueError('Missing registered meshes: '+str(missing_meshes))
+    for obj in objects:
+        if any(not math.isfinite(v) or v <= 0 for v in obj.scale): raise ValueError('Invalid scale: '+obj.name)
+    for name,bone in asset.get('facialControls',{}).items():
+        if bone not in rig.pose.bones: raise ValueError('Unsupported facial control: '+name)
     if set(asset['bones'])-set(rig.data.bones.keys()): raise ValueError('Required bones missing')
     root = bpy.data.objects.new('CharacterRoot',None)
     bpy.context.collection.objects.link(root)
+    norm=asset.get('normalization',{'scale':1,'rotationDegrees':[0,0,0]})
+    root.scale=(norm['scale'],)*3
+    root.rotation_euler=tuple(math.radians(v) for v in norm['rotationDegrees'])
     for obj in objects:
         if obj.parent is None:
             obj.parent = root
@@ -122,6 +140,8 @@ def sequence(plan,asset):
     track.name = 'CharacterSequence'
     position = (0,0,0)
     previous_end = 1
+    mascot = 'renderMode' in plan
+    previous_blend = 0
     for item in plan['character']['actions']:
         action = bpy.data.actions.get(asset['actions'][item['name']])
         if not action: raise ValueError('Missing registered action: '+item['name'])
@@ -133,16 +153,28 @@ def sequence(plan,asset):
         for c in channels:
             rig.path_resolve(c.data_path)
         start,end = item['startFrame'],item['endFrame']
-        strip = track.strips.new(item['name'],start,action)
+        if mascot:
+            track = rig.animation_data.nla_tracks.new()
+            track.name = 'Body.'+item['name']
+        transition = min(max(item.get('blendInFrames',0),previous_blend),start-1,(end-start)/2) if mascot else 0
+        strip = track.strips.new(item['name'],int(start-transition),action)
         strip.action_slot = slots[0]
         strip.action_frame_start,strip.action_frame_end = action.frame_range
         length = strip.action_frame_end-strip.action_frame_start
         if length <= 0: raise ValueError('Action has no duration')
-        strip.scale = (end-start)/length
+        if mascot and item['name'] in ('walk','run','idle'):
+            strip.repeat = (end-strip.frame_start)/length
+        else:
+            strip.scale = (end-strip.frame_start)/length
         strip.frame_end = end
-        strip.extrapolation = 'NOTHING'
+        strip.extrapolation = 'HOLD_FORWARD' if mascot else 'NOTHING'
         strip.blend_type = 'REPLACE'
-        strip.blend_in = strip.blend_out = min(4,(end-start)/3)
+        if mascot:
+            strip.blend_in = transition
+            strip.blend_out = 0
+            previous_blend = item.get('blendOutFrames',0)
+        else:
+            strip.blend_in = strip.blend_out = min(4,(end-start)/3)
         # Fade to rest inside each range; no overlapping strips or held poses.
         if 'startPosition' in item and tuple(item['startPosition']) != tuple(position) and start != 1:
             raise ValueError('Root movement must be continuous between actions')
@@ -157,6 +189,10 @@ def sequence(plan,asset):
         previous_end = end
     for c in curves(root.animation_data.action,root.animation_data.action_slot):
         for key in c.keyframe_points: key.interpolation = 'LINEAR'
+    if mascot and plan['character'].get('expressions'):
+        if asset.get('rigDefinition') != 'mascot-v2': raise ValueError('Unsupported facial rig')
+        from facial import apply_expressions
+        apply_expressions(rig,plan['character'].get('expressions',[]),plan['fps']*plan['durationSeconds'])
     return rig
 
 if __name__ == '__main__':

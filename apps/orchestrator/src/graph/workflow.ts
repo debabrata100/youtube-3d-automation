@@ -8,12 +8,14 @@ import { runCommand } from "../utils/runCommand.js";
 
 import { ROOT, BLENDER } from '../utils/paths.js';
 import { resolveAsset, validateAnimations } from '../assets/registry.js';
+import { resolveWolfAsset } from '../assets/wolfAsset.js';
+import { readFile } from 'node:fs/promises';
 import { SceneSchema } from '../schemas/scene.js';
 import { verifyVideo } from '../utils/verifyVideo.js';
 
 const workerScript = path.join(ROOT, "workers/blender/build_from_plan.py");
 
-export function createWorkflow(planner = generateScenePlan) {
+export function createWorkflow(planner = generateScenePlan, options: {wolfReview?:boolean,wolfMotionReview?:boolean} = {}) {
 return new StateGraph(AnimationState)
   .addNode("planScene", async (state) => {
     console.log("1. Planning scene...");
@@ -26,7 +28,7 @@ return new StateGraph(AnimationState)
 
   .addNode('resolveAssets', async state => {
     const plan = SceneSchema.parse(state.plan);
-    return {plan, asset: 'character' in plan ? await resolveAsset(plan.character.assetId) : null};
+    return {plan, asset: 'character' in plan ? ((options.wolfReview || options.wolfMotionReview) && plan.character.assetId==='wolf-warrior-native' ? await resolveWolfAsset() : await resolveAsset(plan.character.assetId)) : null};
   })
   .addNode('validateAnimations', async state => {
     if (!state.plan) throw new Error('Missing scene plan');
@@ -62,7 +64,7 @@ return new StateGraph(AnimationState)
         "--factory-startup",
         "--python-exit-code", "1",
         "--python",
-        workerScript,
+        state.asset && 'adapter' in state.asset ? path.join(ROOT,'workers/blender',state.plan && 'controller' in state.plan ? 'character_controller.py' : 'wolf_native.py') : workerScript,
         "--",
         path.join(state.jobDir, "plan.json"),
         state.jobDir,
@@ -78,7 +80,7 @@ return new StateGraph(AnimationState)
 
     await runCommand(
       BLENDER,
-      ["--background", "--disable-autoexec", path.join(state.jobDir, "scene.blend"), "--render-anim"],
+      ["--background", "--disable-autoexec", ...(state.plan && "controller" in state.plan ? ["--factory-startup"] : []), path.join(state.jobDir, "scene.blend"), "--render-anim"],
       ROOT,
     );
 
@@ -151,7 +153,12 @@ return new StateGraph(AnimationState)
       throw new Error("Generated video is empty");
     }
 
-    await verifyVideo(state.videoPath, state.plan);
+    const metadata = await verifyVideo(state.videoPath, state.plan);
+    if (state.asset && 'adapter' in state.asset) {
+      const filename=path.join(state.jobDir,'animation-report.json');
+      const report=JSON.parse(await readFile(filename,'utf8'));
+      await writeFile(filename,JSON.stringify({...report,status:'video_verified_pending_visual_review',video:metadata},null,2));
+    }
     console.log("Video exists:", state.videoPath);
     console.log("File size:", file.size, "bytes");
 
