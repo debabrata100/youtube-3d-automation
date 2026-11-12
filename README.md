@@ -12,6 +12,7 @@ Requires Node.js 22+, Blender 5.3, FFmpeg and FFprobe on PATH. On macOS install 
 
 ```sh
 cd apps/orchestrator
+node --version # must be 22 or newer; select your Node 22 installation first
 npm ci
 cp .env.example .env
 # Set OPENAI_API_KEY in .env (never commit it).
@@ -72,6 +73,6 @@ The demo is a rigid-segment humanoid, not a production character. There is no au
 
 Blender 5.3 uses slotted Actions: use `bpy_extras.anim_utils.action_get_channelbag_for_slot` and `NlaStrip.action_slot`, not legacy `action.fcurves`. Python exceptions exit Blender with a nonzero status. Background asset loading and rendering disable automatic script execution; register only trusted assets.
 
-On macOS EEVEE needs access to a Metal device. A restricted sandbox or headless session can fail with “no default Metal device available”; run integration in a local session permitted to use the GPU. The USD `ARCH_CACHE_LINE_SIZE` startup warning is harmless when Blender continues successfully. Check `BLENDER_PATH` if spawn fails. Missing asset errors mean `npm run assets:demo` has not run or the registry path is wrong. Missing bones/actions or multiple Action slots require normalizing the source asset. FFmpeg/FFprobe must both be on PATH. A failed job remains available for inspection; retry with a fresh job directory.
+On macOS EEVEE needs access to a Metal device. A restricted sandbox or headless session can fail with “no default Metal device available”; run integration in a local session permitted to use the GPU. The USD `ARCH_CACHE_LINE_SIZE` startup warning is harmless when Blender continues successfully. Check `BLENDER_PATH` if spawn fails. Missing asset errors mean `npm run assets:demo` has not run or the registry path is wrong. Missing bones/actions or multiple Action slots require normalizing the source asset. If TypeScript fails with `ERR_UNKNOWN_FILE_EXTENSION`, check `node --version` in the orchestrator directory; some shell setups select an older Node there. Use Node 22 or newer. FFmpeg/FFprobe must both be on PATH. A failed job remains available for inspection; retry with a fresh job directory.
 
 Blender API references: [slotted Actions migration](https://developer.blender.org/docs/release_notes/5.0/python_api/) and [Blender 5.3 NLA strips](https://docs.blender.org/api/5.3/bpy.types.NlaStrip.html).
