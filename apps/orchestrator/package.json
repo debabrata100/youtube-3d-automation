@@ -8,8 +8,9 @@
     "dev": "node --import tsx src/index.ts",
     "typecheck": "tsc --noEmit",
     "assets:demo": "node --import tsx src/assets/generateDemo.ts",
-    "test": "node --import tsx --test test/unit.test.ts",
-    "test:integration": "node --import tsx --test test/integration.test.ts"
+    "test": "node --import tsx --test test/unit.test.ts test/planning.test.ts",
+    "test:integration": "node --import tsx --test test/integration.test.ts",
+    "plan": "node --import tsx src/plan.ts"
   },
   "keywords": [],
   "author": "",

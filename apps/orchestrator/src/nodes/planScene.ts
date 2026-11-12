@@ -1,18 +1,18 @@
 import { listAssets } from "../assets/registry.js";
-import { z } from "zod";
 import { ChatOpenAI } from "@langchain/openai";
-import { SceneSchema, PlanningSchema, type ScenePlan } from "../schemas/scene.js";
+import type { ScenePlan } from "../schemas/scene.js";
+import { LLMSceneSchema, normalizeScenePlan } from "../schemas/llmScene.js";
 
-export async function generateScenePlan(prompt: string): Promise<ScenePlan> {
+export const SCENE_OUTPUT_OPTIONS = { name: "scene_plan", method: "jsonSchema", strict: true } as const;
+
+export async function generateScenePlan(prompt: string, modelOverride?: ChatOpenAI): Promise<ScenePlan> {
   const available = (await listAssets()).map(asset => ({id:asset.id,name:asset.name,actions:Object.keys(asset.actions)}));
-  const model = new ChatOpenAI({
+  const model = modelOverride ?? new ChatOpenAI({
     model: process.env.OPENAI_MODEL ?? "gpt-4.1-mini",
     temperature: 0,
   });
 
-  const planner = model.withStructuredOutput(z.object({scene: PlanningSchema}), {
-    name: "scene_plan",
-  });
+  const planner = model.withStructuredOutput(LLMSceneSchema, SCENE_OUTPUT_OPTIONS);
 
   const plan = await planner.invoke([
     {
@@ -27,8 +27,9 @@ Supported capabilities:
 - One animated sphere OR one registered cartoon character from this registry: ${JSON.stringify(available)}
 - Character actions: idle, walk, run, jump, wave; ordered nonoverlapping inclusive frame ranges
 - Use character + environment for characters, ball + floor for spheres, never both
-- For walking then waving over 5 seconds use walk frames 1-72 with positions [-3,0,0] to [0,0,0], wave frames 73-120
-- Movement requires both startPosition and endPosition; otherwise preserve position
+- For walking then waving over 5 seconds use walk frames 1-72 with startPosition {x:-3,y:0,z:0} and endPosition {x:0,y:0,z:0}, wave frames 73-120
+- Every action must include startPosition and endPosition: use {x,y,z} objects for movement, or null for BOTH to preserve position
+- Return the scene inside the required scene wrapper
 - Frame 1 is the first frame; final frame is durationSeconds * 24
 - Use environment type simple-ground and color green
 - A flat floor
@@ -47,5 +48,5 @@ Do not invent unsupported objects or features.
     },
   ]);
 
-  return SceneSchema.parse(plan.scene);
+  return normalizeScenePlan(plan);
 }
