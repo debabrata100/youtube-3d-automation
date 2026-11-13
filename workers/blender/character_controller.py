@@ -102,6 +102,9 @@ def build(plan,asset,job):
             if polish:
                 from animation_polish import wave_v2
                 action,slot=wave_v2(rig,config)
+                if controller.get('performance'):
+                    from performance_refinement import wave_v3
+                    action,slot=wave_v3(rig,config,controller['performance']['wave'])
             track=rig.animation_data.nla_tracks.new();track.name='Controller.Wave'
             strip=track.strips.new('Layered right arm wave',item['startFrame'],action);strip.action_slot=slot
             strip.scale=(item['endFrame']-item['startFrame'])/72;strip.frame_end=item['endFrame'];strip.blend_type='ADD';strip.extrapolation='NOTHING'
@@ -140,7 +143,7 @@ def build(plan,asset,job):
     polish_foot=None
     if polish:
         from animation_polish import stabilize
-        polish_foot=stabilize(rig,motion,next(a for a in schedule if a['type']=='walk'),job)
+        polish_foot=stabilize(rig,motion,next(a for a in schedule if a['type']=='walk'),job,controller.get('performance'))
     # Measure foot sliding in-place vs translating under the same cadence and orientation.
     walking=next((i for i in schedule if i['type']=='walk'),None)
     if not walking:raise ValueError('This Phase 3 wolf adapter currently requires a walk segment')
@@ -182,12 +185,14 @@ def build(plan,asset,job):
     scene.frame_set(sample);e=rig.evaluated_get(bpy.context.evaluated_depsgraph_get());raised=(e.matrix_world@e.pose.bones['FK_Hand.R'].matrix.translation).copy();left=e.pose.bones['FK_Hand.L'].matrix.copy();posed=native.points(body,sample)
     wave_track=next(t for t in rig.animation_data.nla_tracks if t.name=='Controller.Wave');wave_track.mute=True
     native.points(body,sample);e=rig.evaluated_get(bpy.context.evaluated_depsgraph_get());rest=e.matrix_world@e.pose.bones['FK_Hand.R'].matrix.translation;opposite=e.pose.bones['FK_Hand.L'].matrix.copy();unposed=native.points(body,sample)
-    if raised.z-rest.z<.3 or left!=opposite:raise ValueError('Wave failed to raise right hand independently; do not force deformation bones')
+    left_delta=(left.translation-opposite.translation).length
+    torso_allowed=bool(controller.get('performance'))
+    if raised.z-rest.z<.3 or (left_delta>.035 if torso_allowed else left!=opposite):raise ValueError('Wave failed to raise right hand independently; do not force deformation bones')
     wave_track.mute=False
     scene.frame_set(total);final_position=motion.location.copy();final_heading=motion.rotation_euler.z
     if (final_position-position).length>.001:raise ValueError('Destination not reached')
     report.update({'controller':controller,'schedule':schedule,'timeline':states,'status':'controller_scene_verified_pending_render','frames':total,
-        'wave':{'action':'Wolf.Controller.Wave.v2' if polish else 'Wolf.Controller.Wave.v1','controls':config['rightArmControls'],'handLiftMeters':raised.z-rest.z,'oppositeArmUnchanged':True,'meshDifference':native.mesh_delta(posed,unposed),'cycles':2 if polish else 3,'returnToIdle':True},
+        'wave':{'action':'Wolf.Controller.Wave.v3' if controller.get('performance') else 'Wolf.Controller.Wave.v2' if polish else 'Wolf.Controller.Wave.v1','controls':config['rightArmControls'],'handLiftMeters':raised.z-rest.z,'oppositeArmUnchanged':left==opposite,'oppositeArmRigLocalShift':left_delta,'oppositeArmChannelsIsolated':True,'intentionalTorsoParticipation':torso_allowed,'meshDifference':native.mesh_delta(posed,unposed),'cycles':2 if polish else 3,'returnToIdle':True},
         'motion':{'displacementMeters':(final_position-Vector(controller['startPosition'])).length,'finalPosition':list(final_position),'finalHeadingRadians':final_heading,'destinationToleranceMeters':.001},
         'camera':{'preset':controller['cameraPreset'],'location':list(camera.location),'fullBodyAllFramesChecked':controller['cameraPreset']=='full_body' and not scheduled_camera},
         'floor':{'minimum':min(b[0][2] for b in all_bounds),'maximumLowerBound':max(b[0][2] for b in all_bounds)},
@@ -228,6 +233,9 @@ def review(job):
     if report['controller'].get('polish'):
         from animation_polish import finalize_quality
         finalize_quality(job,report)
+    if report['controller'].get('performance'):
+        from performance_refinement import finalize_performance
+        finalize_performance(job,report)
     images=[];folder=job/'previews';folder.mkdir(exist_ok=True)
     for item in report['schedule']:
         for f in sorted({item['startFrame'],(item['startFrame']+item['endFrame'])//2,item['endFrame']}):

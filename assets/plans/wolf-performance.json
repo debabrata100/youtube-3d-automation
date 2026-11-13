@@ -1,0 +1,90 @@
+{
+  "characterId": "wolf-warrior-native",
+  "fps": 24,
+  "durationSeconds": 15,
+  "startPosition": [
+    -1.5,
+    0,
+    0
+  ],
+  "headingDegrees": 0,
+  "cameraPreset": "full_body",
+  "actions": [
+    {
+      "type": "idle",
+      "start": 0,
+      "end": 2
+    },
+    {
+      "type": "turn",
+      "start": 2,
+      "end": 3,
+      "mode": "relative",
+      "degrees": 90
+    },
+    {
+      "type": "walk",
+      "start": 3,
+      "end": 8,
+      "destination": [
+        1.5,
+        0,
+        0
+      ],
+      "speedMetersPerSecond": 0.6
+    },
+    {
+      "type": "turnToCamera",
+      "start": 8,
+      "end": 10
+    },
+    {
+      "type": "wave",
+      "start": 10,
+      "end": 13
+    },
+    {
+      "type": "idle",
+      "start": 13,
+      "end": 15
+    }
+  ],
+  "polish": true,
+  "cameraShots": [
+    {
+      "start": 0,
+      "end": 8,
+      "preset": "wide",
+      "target": "wolf-warrior-native",
+      "transition": "cut",
+      "transitionFrames": 0
+    },
+    {
+      "start": 8,
+      "end": 10,
+      "preset": "medium",
+      "target": "wolf-warrior-native",
+      "transition": "cut",
+      "transitionFrames": 0
+    },
+    {
+      "start": 10,
+      "end": 15,
+      "preset": "medium",
+      "target": "wolf-warrior-native",
+      "transition": "smooth",
+      "transitionFrames": 12
+    }
+  ],
+  "performance": {
+    "wave": {
+      "intensity": 0.85,
+      "handHeight": 0.8,
+      "waveCount": 2,
+      "wristAmplitude": 0.17,
+      "anticipation": 0.12,
+      "recovery": 0.28
+    },
+    "releaseFrames": 24
+  }
+}

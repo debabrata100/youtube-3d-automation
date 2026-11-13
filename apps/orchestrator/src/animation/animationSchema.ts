@@ -1,10 +1,12 @@
 import {z} from 'zod';
 const position=z.tuple([z.number().min(-10).max(10),z.number().min(-10).max(10),z.literal(0)]);
 const timing={start:z.number().min(0),end:z.number().positive()};
+export const WaveV3Schema=z.object({intensity:z.number().min(.4).max(1).default(.85),handHeight:z.number().min(.75).max(1).default(.8),waveCount:z.literal(2).default(2),wristAmplitude:z.number().min(.08).max(.28).default(.17),anticipation:z.number().min(.06).max(.18).default(.12),recovery:z.number().min(.2).max(.35).default(.28)}).strict();
 export const ControllerSchema=z.object({
   characterId:z.literal('wolf-warrior-native'),fps:z.literal(24),durationSeconds:z.number().int().min(1).max(30),
   startPosition:position,headingDegrees:z.number().finite(),cameraPreset:z.enum(['full_body','medium','close_up']),
   polish:z.boolean().optional(),
+  performance:z.object({wave:WaveV3Schema.default({intensity:.85,handHeight:.8,waveCount:2,wristAmplitude:.17,anticipation:.12,recovery:.28}),releaseFrames:z.number().int().min(16).max(32).default(24)}).strict().optional(),
   cameraShots:z.array(z.object({start:z.number().min(0),end:z.number().positive(),preset:z.enum(['wide','medium']),target:z.literal('wolf-warrior-native'),transition:z.enum(['cut','smooth']),transitionFrames:z.number().int().min(0).max(48)}).strict()).optional(),
   actions:z.array(z.discriminatedUnion('type',[
     z.object({...timing,type:z.literal('idle')}).strict(),
@@ -37,6 +39,7 @@ export const ControllerSchema=z.object({
     }
     if(cameraEnd!==plan.durationSeconds)ctx.addIssue({code:'custom',message:'Camera shots must cover the scene'});
   }
+  if(plan.performance && !plan.polish)ctx.addIssue({code:'custom',message:'Performance refinement requires polish mode'});
   if(plan.polish && !plan.cameraShots)ctx.addIssue({code:'custom',message:'Polish requires an explicit camera schedule'});
   if(end!==plan.durationSeconds)ctx.addIssue({code:'custom',message:'Actions must fill the scene duration'});
 });

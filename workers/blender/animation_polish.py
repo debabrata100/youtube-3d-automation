@@ -42,12 +42,13 @@ def capture_feet(rig,frames):
         values.append({n:e.matrix_world@e.pose.bones[n].matrix.translation for n in FOOT_NAMES})
     return values
 
-def stabilize(rig,motion,walking,job):
+def stabilize(rig,motion,walking,job,performance=None):
     if any(rig.pose.bones[n].constraints for n in FOOT_NAMES):raise ValueError('Foot controllers are constrained; safe locking adapter unavailable')
     if any(abs(rig.pose.bones['Option']['IK-FK_Leg.'+side]-1)>.001 for side in ('L','R')):raise ValueError('Expected native IK leg mode; refusing to switch rig configuration silently')
     start,end=walking['startFrame'],walking['endFrame'];frames=list(range(start,end+1));raw=capture_feet(rig,frames)
     masks={n:stance_pairs(raw,n,24) for n in FOOT_NAMES};before=statistics(raw,masks,24)
-    corrections={f:{n:Vector((0,0,0)) for n in FOOT_NAMES} for f in range(start,end+13)};segments={};limit=.35
+    release_frames=performance['releaseFrames'] if performance else 12
+    corrections={f:{n:Vector((0,0,0)) for n in FOOT_NAMES} for f in range(start,end+release_frames+1)};segments={};limit=.35
     for name in FOOT_NAMES:
         runs=intervals(masks[name]);segments[name]=[[start+a,start+b] for a,b in runs]
         for a,b in runs:
@@ -56,11 +57,18 @@ def stabilize(rig,motion,walking,job):
                 delta=anchor-raw[index][name];delta.z=0
                 if delta.length>limit:delta*=limit/delta.length
                 # A short onset taper avoids an abrupt velocity change at touchdown.
-                delta*=smooth(min(1,(index-a)/2))
+                if performance:
+                    from performance_math import smoother
+                    delta*=smoother(min(1,(index-a)/4))
+                else:delta*=smooth(min(1,(index-a)/2))
                 corrections[start+index][name]=delta;last=delta
-            for k in range(1,13):
+            for k in range(1,release_frames+1):
                 f=start+b+k
-                if f in corrections and corrections[f][name].length==0:corrections[f][name]=last*release_weight(k,12)
+                if f in corrections and corrections[f][name].length==0:
+                    if performance:
+                        from performance_math import release
+                        corrections[f][name]=last*release(k,release_frames)
+                    else:corrections[f][name]=last*release_weight(k,12)
     # Convert world correction vectors into native bone location channels without changing constraints.
     local={};native_lengths={}
     for frame,values in corrections.items():
@@ -72,7 +80,7 @@ def stabilize(rig,motion,walking,job):
             a=rig.convert_space(pose_bone=rig.pose.bones[name],matrix=current,from_space='WORLD',to_space='LOCAL')
             b=rig.convert_space(pose_bone=rig.pose.bones[name],matrix=target,from_space='WORLD',to_space='LOCAL')
             local[frame][name]=b.translation-a.translation
-    action=bpy.data.actions.new('Wolf.Controller.StanceCorrection.v1');action.use_fake_user=True;rig.animation_data.action=action
+    action=bpy.data.actions.new('Wolf.Controller.StanceCorrection.v2' if performance else 'Wolf.Controller.StanceCorrection.v1');action.use_fake_user=True;rig.animation_data.action=action
     for frame,values in local.items():
         for name,value in values.items():rig.pose.bones[name].location=value;rig.pose.bones[name].keyframe_insert('location',frame=frame)
     slot=rig.animation_data.action_slot
@@ -101,7 +109,10 @@ def stabilize(rig,motion,walking,job):
             else:high=mid
         allowed.append(low)
     # Anticipate safety limits without a one-frame gain discontinuity; never exceed a safe per-frame gain.
-    gains=[min(allowed[max(0,i-3):min(len(allowed),i+4)]) for i in range(len(allowed))]
+    if performance:
+        from performance_math import safety_envelope
+        gains=safety_envelope(allowed,.045)
+    else:gains=[min(allowed[max(0,i-3):min(len(allowed),i+4)]) for i in range(len(allowed))]
     for index,gain in enumerate(gains):set_gain(index,gain)
     verified_max=max(ratio(frame) for frame in correction_frames)
     if verified_max>safety_limit+.001:raise ValueError('Foot stabilization exceeded native leg stretch safety limit')
@@ -116,21 +127,22 @@ def stabilize(rig,motion,walking,job):
         current=after_samples[5:5+len(samples)]
         legacy_masks={n:[max(a[n][2],b[n][2])<min(p[n][2] for p in samples)+.045 for a,b in zip(samples,samples[1:])] for n in FOOT_NAMES}
         comparison={'baselineJob':baseline['job'],'frames':[compare_frames[0],compare_frames[-1]],'before':statistics(samples,base_masks,24),'afterSameBaselineMasks':statistics(current,base_masks,24),'legacyHeightOnly':{'before':statistics(samples,legacy_masks,24),'afterSameBaselineMasks':statistics(current,legacy_masks,24),'definition':'Original Phase 3 height-only 4.5cm proxy, identical saved-baseline masks'},'definition':'height <= per-foot minimum + 4.5cm AND absolute vertical speed <= 0.16m/s; identical baseline masks for paired comparison'}
-    return {'implemented':True,'legStretchSafetyLimitRatio':safety_limit,'verifiedMaxLegLengthRatio':verified_max,'safetyGainRange':[min(gains),max(gains)],'method':'bounded ADD offsets on original Foot IK controls; no constraints disabled','maxCorrectionMeters':max(v.length for row in corrections.values() for v in row.values()),'correctionLimitMeters':limit,'releaseFrames':12,'contactGapBridgeFrames':3,'stanceIntervals':segments,'before':before,'afterSameMasks':after,'pairedPhase3Comparison':comparison,'contactDefinition':'height and vertical velocity; control-origin proxy, not a sole/pressure sensor','humanVisualReviewRequired':True}
+    return {'implemented':True,'legStretchSafetyLimitRatio':safety_limit,'verifiedMaxLegLengthRatio':verified_max,'safetyGainRange':[min(gains),max(gains)],'method':'bounded ADD offsets on original Foot IK controls; no constraints disabled','maxCorrectionMeters':max(v.length for row in corrections.values() for v in row.values()),'correctionLimitMeters':limit,'releaseFrames':release_frames,'maxSafetyGainStep':max(abs(b-a) for a,b in zip(gains,gains[1:])),'contactGapBridgeFrames':3,'stanceIntervals':segments,'before':before,'afterSameMasks':after,'pairedPhase3Comparison':comparison,'contactDefinition':'height and vertical velocity; control-origin proxy, not a sole/pressure sensor','humanVisualReviewRequired':True}
 
 def finalize_quality(job,report):
     rig=bpy.data.objects['Armature'];body=bpy.data.objects['Body'];scene=bpy.context.scene
-    baseline=json.loads((job/'baseline-feet.json').read_text());samples=baseline['samples'];frames=list(range(78,187));current=capture_feet(rig,frames)
-    masks={n:stance_pairs(samples,n,24) for n in FOOT_NAMES}
-    legacy_masks={n:[max(a[n][2],b[n][2])<min(p[n][2] for p in samples)+.045 for a,b in zip(samples,samples[1:])] for n in FOOT_NAMES}
-    paired=report['animationQuality']['footContact']['pairedPhase3Comparison']
-    paired.update(before=statistics(samples,masks,24),afterSameBaselineMasks=statistics(current,masks,24),legacyHeightOnly={'before':statistics(samples,legacy_masks,24),'afterSameBaselineMasks':statistics(current,legacy_masks,24),'definition':'Original Phase 3 height-only mask, unchanged baseline frames 78..186'})
-    paired['meanReductionFraction']=1-paired['afterSameBaselineMasks']['meanMetersPerSecond']/paired['before']['meanMetersPerSecond']
+    if (job/'baseline-feet.json').exists():
+        baseline=json.loads((job/'baseline-feet.json').read_text());samples=baseline['samples'];frames=list(range(78,187));current=capture_feet(rig,frames)
+        masks={n:stance_pairs(samples,n,24) for n in FOOT_NAMES}
+        legacy_masks={n:[max(a[n][2],b[n][2])<min(p[n][2] for p in samples)+.045 for a,b in zip(samples,samples[1:])] for n in FOOT_NAMES}
+        paired=report['animationQuality']['footContact']['pairedPhase3Comparison']
+        paired.update(before=statistics(samples,masks,24),afterSameBaselineMasks=statistics(current,masks,24),legacyHeightOnly={'before':statistics(samples,legacy_masks,24),'afterSameBaselineMasks':statistics(current,legacy_masks,24),'definition':'Original Phase 3 height-only mask, unchanged baseline frames 78..186'})
+        paired['meanReductionFraction']=1-paired['afterSameBaselineMasks']['meanMetersPerSecond']/paired['before']['meanMetersPerSecond']
     track=next(t for t in rig.animation_data.nla_tracks if t.name=='Controller.StanceCorrection')
     lengths={};foot_motion={};foot_peaks={}
     for enabled in [False,True]:
         track.mute=not enabled;records=[];feet=[]
-        for f in range(73,205):
+        for f in range(73,193+report['animationQuality']['footContact'].get('releaseFrames',12)):
             bpy.context.scene.frame_set(f);e=rig.evaluated_get(bpy.context.evaluated_depsgraph_get());records.append({n:(e.pose.bones[n].tail-e.pose.bones[n].head).length for n in ('DEF_Thigh.L','DEF_Thigh.R','DEF_Shin.L','DEF_Shin.R')})
             feet.append({n:e.matrix_world@e.pose.bones[n].matrix.translation for n in FOOT_NAMES})
         lengths[enabled]=records

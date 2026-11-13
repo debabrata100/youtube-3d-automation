@@ -732,3 +732,163 @@ step increases from about 9.0 to 12.5 cm/frame during a swing/release interval
 visual review, not dismissed as proof of perfect contact. Extra full-body foot
 motion/stop diagnostic images are provided so medium-shot cropping does not hide
 those poses. The original source and native Action curve data pass integrity checks.
+
+## Milestone 4.5 Phase 3.2 — performance refinement (review only)
+
+Run from `apps/orchestrator` with Node 22+, Blender 5.3 and FFmpeg installed:
+
+```sh
+npm run wolf:performance-review
+```
+
+This uses the existing LangGraph render/encode workflow with the deterministic
+`assets/plans/wolf-performance.json` plan; it does not call OpenAI. Existing
+`wolf:review`, `wolf:motion-review` and `wolf:polish-review` behavior is retained.
+The sequence remains idle → turn → 3-meter walk → turn to camera → wave → idle,
+15 seconds, 360 frames, 24 FPS, 1280×720 H.264. The existing camera scheduler
+recomputes composition from the refined, evaluated geometry: full-body tracking
+wide through frame 192, intentional medium cut at 193, smooth continuation at 241.
+All evaluated Body vertices in each shot's required region are checked with 1.5%
+frame margins; medium shots deliberately crop the lower body.
+
+The opt-in controller `performance` block requires `polish: true`. It adds:
+
+- Four-frame quintic contact onset, a default 24-frame quintic release, and a
+  deterministic safety-gain envelope limited to 0.045 change per frame. The
+  existing bounded native Foot-control correction and evaluated 1.05 leg-length
+  ratio limit remain in force. No rig constraints or IK/FK settings are disabled.
+- `Wolf.Controller.Wave.v3`, alongside the preserved v1/v2 Actions, layered over
+  native idle with Blender Action slots. It uses the original right FK arm and
+  `FK_Spine_02` controls, delayed elbow/wrist movement, two small wrist cycles,
+  a lower greeting pose, subtle torso motion and smooth recovery.
+
+Wave parameters (edit the plan before running):
+
+| Parameter | Default | Meaning / supported range |
+| --- | ---: | --- |
+| `intensity` | 0.85 | Anticipation, torso and small arm accents; 0.4–1 |
+| `handHeight` | 0.8 | Shoulder rotation multiplier, **not a height in meters**; 0.75–1 |
+| `waveCount` | 2 | Exactly two verified cycles; other counts rejected |
+| `wristAmplitude` | 0.17 | Wrist oscillation amplitude in radians; 0.08–0.28 |
+| `anticipation` | 0.12 | Fraction of normalized gesture duration; 0.06–0.18 |
+| `recovery` | 0.28 | Fraction reserved for lowering; 0.2–0.35 |
+
+`releaseFrames` accepts 16–32 (default 24). Only the default parameter combination
+has been rendered and visually inspected. All variants must pass the existing
+safety/framing checks and require human review. Slight opposite-hand movement
+from the torso is intentional; no opposite-arm channels are authored.
+The application controller schema is separate from the unchanged OpenAI-facing
+strict response schema.
+
+A unique `jobs/wolf-performance-UUID/` contains:
+
+```text
+scene.blend                        # existing repository convention
+output/animation.mp4
+animation-report.json
+comparison-report.json
+performance-baseline.json          # read-only capture of Phase 3.1
+performance-foot-samples.json
+contact-sheet.png
+visual-review-checklist.md
+previews/foot-contact/             # includes full-body stop diagnostics
+previews/wave/                     # includes Phase 3.1 frame 276 when present
+previews/camera/                   # walking, stopping, cut boundaries
+```
+
+The Phase 3.1 default baseline is
+`jobs/wolf-polish-14813eea-226b-4cdf-8e76-ed2bad140de4`.
+Override it with a matching Phase 3.1 job inside `jobs/`:
+
+```sh
+WOLF_PERFORMANCE_BASELINE="/absolute/path/to/jobs/wolf-polish-UUID" npm run wolf:performance-review
+```
+
+Missing baseline files produce `available: false` with a reason; no before values
+are fabricated. Current, unpaired metrics remain available, explicitly separate
+from the paired comparison. Invalid baselines (different asset, v3 Action, or
+wrong duration) fail. Previous jobs and the source character are not overwritten.
+
+### Measured Phase 3.1 → Phase 3.2 comparison
+
+Verified review job: `jobs/wolf-performance-4af821b9-1d31-4803-a981-bfdf351e7c2c`.
+
+| Metric | Phase 3.1 | Phase 3.2 | Result |
+| --- | ---: | ---: | --- |
+| Mean stance sliding | 0.155787 m/s | 0.136156 m/s | 12.6% lower; **0.12 target missed** |
+| 95th percentile stance sliding | 0.967426 m/s | 0.667692 m/s | 31.0% lower; target met |
+| Maximum stance sliding | 1.215726 m/s | 1.150004 m/s | 5.4% lower; **15% reduction target missed** |
+| Maximum swing/release step | 12.484 cm | 10.915 cm | 12.6% lower; target met |
+| Maximum vertical foot step | 1.4166117 cm | 1.4166132 cm | +0.0000015 cm, numerical-only increase |
+| Minimum evaluated Body/floor clearance | 1.500003 cm | 1.500005 cm | No measured penetration |
+| Maximum evaluated leg-length ratio | 1.049773 | 1.049880 | Slight increase; within the existing 5% limit |
+| Travel | 3 m | 3 m | Preserved |
+
+Stance measurements use the **same 120 baseline-defined foot pairs**, frames
+78–186, a 4.5 cm height band, vertical speed ≤0.16 m/s. Correction intervals separately bridge gaps of
+up to three frames; the measurement masks themselves are not bridged. Speeds are horizontal Foot-control origins, not calibrated
+sole-pressure contacts. The p95 uses linear interpolation of sorted paired speeds.
+Swing and vertical steps use frames 73–216 for both runs, covering the longer
+release. Raw deltas, meaningful regressions and positive numerical-only deltas
+(≤1e-6 meters or m/s) are all recorded.
+
+The actual cause of the residual spikes is bounded contact correction competing
+with translated native gait and the leg-extension limit, especially near contact
+boundaries; the old shorter release and rapidly varying safety gains also
+contributed to swing steps. A longer C2 release and rate-limited safety envelope
+reduce those effects without increasing stretch. They do not correct the native
+cycle's entire root/sole mismatch or create true toe contacts. More aggressive
+locking was not used to meet a metric at the expense of leg safety.
+
+Wave v2's large shoulder rotation produced the high-arm appearance. V3 lowers
+that rotation, adds a small native torso accent and gives the two wrist cycles
+slightly varying timing/amplitude. Its peak wrist is about 0.303 m above the
+Head **control origin** (not above the ears). Conservative evaluated weighted
+hand/head and hand/chest AABBs show no overlap in this candidate. These checks
+exclude weakly weighted vertices/fur and do not replace triangle collision or
+human inspection of shoulder clearance. The saved scene returns exactly to
+native idle after the wave layer ends.
+
+### Verification and limits
+
+```sh
+npm run typecheck
+npm test
+WOLF_PERFORMANCE_JOB="/absolute/path/to/jobs/wolf-performance-UUID" npm run test:performance
+WOLF_POLISH_JOB="/absolute/path/to/jobs/wolf-polish-UUID" npm run test:polish
+WOLF_MOTION_JOB="/absolute/path/to/jobs/wolf-motion-UUID" npm run test:controller
+WOLF_REVIEW_JOB="/absolute/path/to/jobs/wolf-review-UUID" npm run test:wolf
+npm run test:inspection
+npm run test:integration
+npm run test:mascot
+```
+
+New tests cover deterministic bounded gain envelopes, release endpoints, fixed
+measurement masks, parameter validation, Action slots, two wrist cycles,
+anticipation/recovery, idle restoration, native Action curve integrity, source
+hash, saved-scene reload, leg safety, camera boundaries/hand and head region
+visibility, missing-baseline reporting and FFprobe metadata. Existing strict
+OpenAI schema, procedural character, ball, mascot and importer tests are retained.
+
+Technical checks are distinct from artistic approval. The contact sheet shows a
+lower hand position and complete walking framing; stills cannot establish natural
+wrist timing, convincing toe-off, absence of visible snapping or knee distortion.
+Review both videos and the full-body foot diagnostics using the checklist.
+Residual sliding remains substantial, and mean/worst-case targets remain unmet.
+All outputs stay `reviewOnly: true`, `productionPublishingAllowed: false` and
+`verified_pending_human_visual_review`. Script auto-execution remains disabled;
+the external character's commercial license remains unverified. Milestone 5 and
+other later phases have not been started.
+
+Implementation files: controller schema and package scripts; `wolfPerformanceReview.ts`;
+`wolf-performance.json`; `animation_polish.py`; `character_controller.py`;
+`performance_math.py`, `performance_refinement.py`, `performance_baseline.py`,
+`performance_previews.py`; TypeScript performance unit/integration tests;
+`test_performance.py`, `test_performance_math_unit.py`; this README.
+
+Executed Phase 3.2 verification: TypeScript check passed; 21 unit tests passed;
+7 integration tests passed across performance, polish, controller, native wolf,
+character inspection, procedural character/ball rendering and the 10-second mascot.
+The integration tests include saved-scene Blender checks and FFprobe verification.
+Detailed logs and the file manifest are in the new job’s `implementation-report.md`
+and `test-logs/`. Artistic approval remains pending.
