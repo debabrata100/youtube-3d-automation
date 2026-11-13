@@ -892,3 +892,149 @@ character inspection, procedural character/ball rendering and the 10-second masc
 The integration tests include saved-scene Blender checks and FFprobe verification.
 Detailed logs and the file manifest are in the new job’s `implementation-report.md`
 and `test-logs/`. Artistic approval remains pending.
+
+## Milestone 5 — multi-character scene direction (review only)
+
+```sh
+cd apps/orchestrator
+nvm use 22
+npm run wolf:interaction-review
+# Optional: supply a versioned scene instruction JSON instead of the demo:
+npm run wolf:interaction-review -- /absolute/path/to/scene.json
+WOLF_INTERACTION_JOB="/absolute/path/to/jobs/wolf-interaction-UUID" npm run test:interaction
+```
+
+The offline LangGraph workflow validates a separate `schemaVersion: "1.0"`
+scene instruction format, resolves measured asset footprints, plans interactions,
+builds independent character instances, and uses the same render/encode functions
+as existing workflows. OpenAI-facing and single-character schemas are unchanged.
+Only the existing review-only Wolf Warrior adapter is registered for this milestone.
+
+`src/scene/schema.ts` describes character IDs, initial transforms, optional explicit
+controller timelines, interactions, and camera subjects. `SceneDirector` fills
+unspecified time with idle and compiles approach, face-target, greeting and response
+events into existing controller actions. Explicit actions reserve their intervals,
+including explicit idle; conflicting events fail rather than overwrite them.
+Events sort by effective start time then ID. Greeting includes a preceding mutual
+turn interval, followed by the initiator's wave and a nonoverlapping response.
+An independent response event schedules a wave and assumes facing is already set.
+
+Target positions are sampled at the event's start, after locomotion is resolved.
+Point targets supply a fixed world-space position. A camera target pins the
+composition camera to that XY anchor (on the -Y side of the subjects), so the
+controller faces its actual horizontal location. All camera-facing events must
+use the same anchor; continuous camera tracking during a turn is not implemented. Heading zero faces world -Y,
+positive yaw toward +X, matching the existing adapter. Approach requires an
+appropriate initial heading or preceding turn. The planner checks controller-ramp
+positions and swept separation between rendered samples; it rejects unsafe paths.
+No pathfinding or physics is used.
+
+The demo probes the original asset's normalized evaluated idle/walk geometry,
+adds a 15 cm radial margin, and derives start/stop positions from that footprint.
+A walks 3 m during seconds 3–9; both face each other at 9–12; A waves at 12–15,
+B at 15–18, and both idle through 20. The result is exactly 480 frames at 24 FPS,
+1280×720 H.264. The source asset and prior jobs are never overwritten.
+
+Each instance is built in a separate Blender process using the existing native
+loader, controller, cadence correction, bounded foot stabilization and Wave v3.
+A narrow instance-build mode leaves scene camera/verification to SceneDirector,
+allowing idle-only characters without inventing a walk segment. Local collection
+appends preserve/remap the complete rig hierarchy, constraints, modifiers and
+driver targets. Armature objects/data, pose state, NLA tracks and Actions are
+independent. Object names use `Character.<id>.<role>`; native Action names/curves
+are not globally renamed or edited. Script auto-execution stays disabled.
+
+The multi-subject camera extension fits evaluated geometry with a stable lens
+per shot. Establishing, tracking, two-character and medium shots declare subjects;
+only those subjects are required in frame. Medium shots intentionally crop below
+the upper-body region. Cuts are explicit; this scene schema currently supports
+cuts only, while existing single-character smooth transitions remain available.
+
+Before rendering and again after saved-scene reload, verification checks all
+frames for floor clearance, evaluated Body AABB separation and intended camera
+coverage. Muting each wave must change its actor's mesh while leaving the other
+character unchanged; each wave must restore idle. Controller action endpoints,
+initial/final transforms, NLA timing and Wave v3 assignments are checked. FFprobe
+checks codec, resolution, duration, rate and decoded frame count. Conservative
+footprints/AABBs are proxies, not proof of complete mesh collision freedom.
+
+Each new `jobs/wolf-interaction-UUID/` contains `scene-plan.json`, `scene.blend`,
+`animation-report.json`, `output/animation.mp4`, `contact-sheet.png`, `previews/`,
+`implementation-report.md`, per-character build artifacts under `characters/`,
+and footprint evidence under `footprint/`. Contact-sheet frames follow chronological
+order, left to right, top to bottom. New tests cover validation, conflicts,
+controller independence, heading conventions, safe approach, crossing paths,
+sampled targets, deterministic planning, Blender isolation and the final video.
+
+Human visual approval is still required for gait/contact, both waves, silhouettes,
+turns, interaction readability and camera cuts. Residual sliding and the existing
+native rig's visual limitations remain. Every output retains `reviewOnly: true`
+and `productionPublishingAllowed: false`; successful rendering grants no license.
+No publishing, commit, tag, push or Milestone 6 work is performed by this command.
+
+Verified Milestone 5 review job:
+`jobs/wolf-interaction-76cf010f-3b58-4351-967e-aa5a31af63b7`.
+Typecheck, 28 unit tests and all eight integration suites passed (seven existing
+suites plus interaction). FFprobe confirms 480 frames, H.264, 1280×720, 24 FPS,
+20.000000 seconds. Minimum evaluated planar Body AABB gap is 1.041571 m;
+A travels 3 m and B remains stationary. Wave/walk/root isolation probes measure
+zero mesh change in the other character. Source hash and saved-scene reload pass.
+Detailed commands, results, limitations, file manifest and logs are in the job's
+`implementation-report.md`, `test-results.json` and `test-logs/`.
+Human visual approval remains pending; use `visual-review-checklist.md`.
+
+## Milestone 5.1 — forward-facing greeting gesture
+
+`npm run wolf:interaction-review` now opts scene greetings into the versioned
+`Wolf.Controller.Wave.v4` Action. Existing single-character plans retain v3 unless
+`performance.forwardWave: true` is requested. The old Milestone 5 job is preserved.
+
+The v3 shoulder offsets were authored in rotated native bone-local axes and
+layered over a nonzero idle pose. They raised the hand but left its wrist near
+the chest plane, behind the evaluated chest surface. Opposite world headings
+preserve this defect; the interaction scheduler and world-root turn are correct.
+The prior height/framing checks did not test anatomical forward clearance.
+
+The adapter derives forward from the actual Head-to-nose rig geometry. V4 uses
+a smooth forward hand path with lateral clearance, solves it during authoring,
+then bakes rotations onto the existing right-arm FK controls. Each solved frame
+starts from the previous solution to preserve elbow continuity. No runtime IK
+constraints are added, and native Actions and source files remain intact.
+The wrist is separately oriented so the palm faces anatomical forward and the
+fingers stay upright, with the two existing wrist oscillations layered onto it.
+
+`wave_diagnostics.py` measures chest-relative wrist forward distance, hand height,
+elbow bend, wrist/elbow frame steps, intended-camera visibility, and weighted
+hand/forearm–torso triangle intersections. The forward threshold is calibrated
+from the evaluated chest-front extent plus 5% of native arm length. Checks cover
+the complete transitions and both actors at 0, 90, 180 and 270 degrees. Weighted
+mesh regions omit some seams/fur and do not replace human visual review.
+Quaternion joint steps and raised-palm/finger alignment are also checked.
+
+Verified correction job: `jobs/wolf-interaction-688a2a3c-e2ff-429d-be1b-0a79e2d82bf0`.
+Typecheck, 29 unit tests and nine distinct integration suites pass; the original
+Milestone 5 artifact suite also passes unchanged. Both actors pass all four
+headings, with minimum raised-wrist forward distance 0.565802 m against a
+0.492480 m calibrated threshold. The regenerated MP4 is H.264, 1280×720,
+24 FPS, 480 frames, 20.000000 seconds. The job contains the exact Milestone 5.1
+file manifest, execution logs and pending human-review checklist.
+
+Palm-facing correction: the initial v4 diagnostic mistakenly treated the dorsal
+(-Z) side of the hand as the palm. Mesh review identified the palm as local +Z.
+The adapter now records this explicitly as palm calibration revision 2, aims
+that surface toward the partner, and retains upright fingers. The wave artifact
+test additionally constructs the former dorsal-facing pose on temporary Action
+copies and requires the corrected diagnostic to reject it for both wolves.
+
+New jobs include `wave-diagnostics.json`, `wave-contact-sheet.png`, and 24 labeled
+preview files under `previews/wave/`: front, side, three-quarter and greeting
+views, each with preparation, peak and recovery for both wolves. The JSON index
+records their exact frame numbers. Existing camera angles and interaction timing
+remain in use. Run the additional artifact suite with:
+
+```sh
+WOLF_INTERACTION_JOB="/absolute/path/to/jobs/wolf-interaction-UUID" npm run test:wave
+```
+
+Human visual approval and commercial-license clearance remain pending. No
+publishing, commit, tag, push or Milestone 6 work is performed.

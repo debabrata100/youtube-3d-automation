@@ -53,7 +53,7 @@ def foot_sliding(samples,fps):
                 values.append((b[name].xy-a[name].xy).length*fps);contacts+=1
     return {'contactSamples':contacts,'meanHorizontalSpeedMetersPerSecond':sum(values)/len(values) if values else None,'contactDefinition':'Foot control origin within 4.5 cm of its sequence minimum; proxy, not a sole sensor'}
 
-def build(plan,asset,job):
+def build(plan,asset,job,instance=False):
     controller=plan['controller'];polish=controller.get('polish',False);config=json.loads((Path(__file__).resolve().parents[2]/'assets/characters/wolf-warrior/animation-config.json').read_text())
     native.build(plan,asset,job) # Reuse safe native loading, deformation checks, materials, placement and studio.
     report=json.loads((job/'animation-report.json').read_text());report['baseNativePreflight']=report.pop('checks')
@@ -105,13 +105,19 @@ def build(plan,asset,job):
                 if controller.get('performance'):
                     from performance_refinement import wave_v3
                     action,slot=wave_v3(rig,config,controller['performance']['wave'])
+                    if controller['performance'].get('forwardWave'):
+                        from forward_wave import wave_v4
+                        action,slot=wave_v4(rig,config,controller['performance']['wave'],item['startFrame'],item['endFrame'])
             track=rig.animation_data.nla_tracks.new();track.name='Controller.Wave'
             strip=track.strips.new('Layered right arm wave',item['startFrame'],action);strip.action_slot=slot
             strip.scale=(item['endFrame']-item['startFrame'])/72;strip.frame_end=item['endFrame'];strip.blend_type='ADD';strip.extrapolation='NOTHING'
+            if controller.get('performance',{}).get('forwardWave'):
+                from forward_wave import orient_palm
+                orient_palm(rig,action,slot,config,controller['performance']['wave'],item['startFrame'],item['endFrame'])
     # The placement parent owns normalization only; motion lives one level above it.
     motion=bpy.data.objects.new('CharacterMotion',None);scene.collection.objects.link(motion);placement.parent=motion
     position=Vector(controller['startPosition']);heading=math.radians(controller['headingDegrees']);camera_position=Vector((0,-10,2.5));states=[]
-    if controller.get('cameraShots'):
+    if controller.get('cameraShots') and not instance:
         last_destination=next(a['destination'] for a in reversed(schedule) if a['type']=='walk')
         camera_position=Vector((last_destination[0]*(.65 if controller['cameraShots'][-1]['preset']=='wide' else 1),last_destination[1]-10,2.5))
     for item in schedule:
@@ -141,9 +147,25 @@ def build(plan,asset,job):
         for c in action_get_channelbag_for_slot(motion.animation_data.action,motion.animation_data.action_slot).fcurves:
             for k in c.keyframe_points:k.interpolation='LINEAR'
     polish_foot=None
-    if polish:
+    if polish and any(a['type']=='walk' for a in schedule):
         from animation_polish import stabilize
-        polish_foot=stabilize(rig,motion,next(a for a in schedule if a['type']=='walk'),job,controller.get('performance'))
+        for walking in (a for a in schedule if a['type']=='walk'):
+            polish_foot=stabilize(rig,motion,walking,job,controller.get('performance'))
+    if instance:
+        # SceneDirector owns camera and scene verification; retain the same controller execution.
+        all_bounds=[native.bounds(native.points(body,f)) for f in range(1,total+1)]
+        placement.location.z+=.015-min(b[0][2] for b in all_bounds)
+        report.update(controller=controller,schedule=schedule,timeline=states,animationQuality={'footContact':polish_foot},frames=total)
+        collection=bpy.data.collections.new('CharacterInstance');scene.collection.children.link(collection)
+        rig['sceneRole']='rig';body['sceneRole']='body';motion['sceneRole']='motion'
+        members=[motion]+list(motion.children_recursive)
+        for obj in members:
+            for previous in list(obj.users_collection):previous.objects.unlink(obj)
+            collection.objects.link(obj)
+        scene.frame_set(1)
+        bpy.ops.wm.save_as_mainfile(filepath=str(job/'scene.blend'))
+        (job/'animation-report.json').write_text(json.dumps(report,indent=2))
+        return
     # Measure foot sliding in-place vs translating under the same cadence and orientation.
     walking=next((i for i in schedule if i['type']=='walk'),None)
     if not walking:raise ValueError('This Phase 3 wolf adapter currently requires a walk segment')
@@ -192,7 +214,7 @@ def build(plan,asset,job):
     scene.frame_set(total);final_position=motion.location.copy();final_heading=motion.rotation_euler.z
     if (final_position-position).length>.001:raise ValueError('Destination not reached')
     report.update({'controller':controller,'schedule':schedule,'timeline':states,'status':'controller_scene_verified_pending_render','frames':total,
-        'wave':{'action':'Wolf.Controller.Wave.v3' if controller.get('performance') else 'Wolf.Controller.Wave.v2' if polish else 'Wolf.Controller.Wave.v1','controls':config['rightArmControls'],'handLiftMeters':raised.z-rest.z,'oppositeArmUnchanged':left==opposite,'oppositeArmRigLocalShift':left_delta,'oppositeArmChannelsIsolated':True,'intentionalTorsoParticipation':torso_allowed,'meshDifference':native.mesh_delta(posed,unposed),'cycles':2 if polish else 3,'returnToIdle':True},
+        'wave':{'action':'Wolf.Controller.Wave.v4' if controller.get('performance',{}).get('forwardWave') else 'Wolf.Controller.Wave.v3' if controller.get('performance') else 'Wolf.Controller.Wave.v2' if polish else 'Wolf.Controller.Wave.v1','controls':config['rightArmControls'],'handLiftMeters':raised.z-rest.z,'oppositeArmUnchanged':left==opposite,'oppositeArmRigLocalShift':left_delta,'oppositeArmChannelsIsolated':True,'intentionalTorsoParticipation':torso_allowed,'meshDifference':native.mesh_delta(posed,unposed),'cycles':2 if polish else 3,'returnToIdle':True},
         'motion':{'displacementMeters':(final_position-Vector(controller['startPosition'])).length,'finalPosition':list(final_position),'finalHeadingRadians':final_heading,'destinationToleranceMeters':.001},
         'camera':{'preset':controller['cameraPreset'],'location':list(camera.location),'fullBodyAllFramesChecked':controller['cameraPreset']=='full_body' and not scheduled_camera},
         'floor':{'minimum':min(b[0][2] for b in all_bounds),'maximumLowerBound':max(b[0][2] for b in all_bounds)},

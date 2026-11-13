@@ -24,5 +24,27 @@
   "footContactHeightBandMeters": 0.045,
   "targetHeightMeters": 2.8,
   "reviewOnly": true,
-  "retargetingImplemented": false
+  "retargetingImplemented": false,
+  "forwardWave": {
+    "version": 4,
+    "palmCalibrationRevision": 2,
+    "palmNormalLocal": [0, 0, 1],
+    "palmCalibration": "Mesh front-view review identifies the visible knuckle/nail side as local -Z (dorsal); the palm side is local +Z. Local +Y follows the fingers.",
+    "shoulderOffsetRadians": [
+      1.2,
+      -1.6,
+      1.6
+    ],
+    "elbowOffsetRadians": 1.6,
+    "referenceHandHeight": 0.8,
+    "calibration": "Evaluated native idle + ADD layer; Head-to-FK_Noise confirms forward, shoulder axes are bone-local, not world axes",
+    "controls": {
+      "chest": "DEF_Chest",
+      "head": "Head",
+      "nose": "FK_Noise",
+      "shoulder": "FK_UpperArm.R",
+      "elbow": "FK_Forearm.R",
+      "wrist": "FK_Hand.R"
+    }
+  }
 }

@@ -1,7 +1,7 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import type { ScenePlan } from '../schemas/scene.js';
-export async function verifyVideo(filename:string, plan:ScenePlan) {
+import type { VideoSpec } from '../graph/mediaNodes.js';
+export async function verifyVideo(filename:string, plan:VideoSpec) {
   const {stdout} = await promisify(execFile)('ffprobe',['-v','error','-count_frames','-select_streams','v:0','-show_streams','-show_format','-of','json',filename]);
   const result = JSON.parse(stdout);
   const s = result.streams[0];

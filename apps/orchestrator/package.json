@@ -8,7 +8,8 @@
     "dev": "node --import tsx src/index.ts",
     "typecheck": "tsc --noEmit",
     "assets:demo": "node --import tsx src/assets/generateDemo.ts",
-    "test": "node --import tsx --test test/unit.test.ts test/planning.test.ts test/mascot.test.ts test/inspection.test.ts test/wolf.test.ts test/controller.test.ts test/polish.test.ts test/performance.test.ts",
+    "test": "node --import tsx --test test/unit.test.ts test/planning.test.ts test/mascot.test.ts test/inspection.test.ts test/wolf.test.ts test/controller.test.ts test/polish.test.ts test/performance.test.ts test/sceneDirector.test.ts test/forwardWave.test.ts",
+    "test:wave": "node --import tsx --test test/forwardWave.integration.test.ts",
     "test:integration": "node --import tsx --test test/integration.test.ts",
     "plan": "node --import tsx src/plan.ts",
     "assets:mascot": "node --import tsx src/assets/generateMascot.ts",
@@ -24,7 +25,9 @@
     "wolf:polish-review": "node --import tsx src/wolfPolishReview.ts",
     "test:polish": "node --import tsx --test test/polish.integration.test.ts",
     "wolf:performance-review": "node --import tsx src/wolfPerformanceReview.ts",
-    "test:performance": "node --import tsx --test test/performance.integration.test.ts"
+    "test:performance": "node --import tsx --test test/performance.integration.test.ts",
+    "wolf:interaction-review": "node --import tsx src/wolfInteractionReview.ts",
+    "test:interaction": "node --import tsx --test test/interaction.integration.test.ts"
   },
   "keywords": [],
   "author": "",

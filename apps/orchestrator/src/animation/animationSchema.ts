@@ -6,7 +6,7 @@ export const ControllerSchema=z.object({
   characterId:z.literal('wolf-warrior-native'),fps:z.literal(24),durationSeconds:z.number().int().min(1).max(30),
   startPosition:position,headingDegrees:z.number().finite(),cameraPreset:z.enum(['full_body','medium','close_up']),
   polish:z.boolean().optional(),
-  performance:z.object({wave:WaveV3Schema.default({intensity:.85,handHeight:.8,waveCount:2,wristAmplitude:.17,anticipation:.12,recovery:.28}),releaseFrames:z.number().int().min(16).max(32).default(24)}).strict().optional(),
+  performance:z.object({forwardWave:z.literal(true).optional(),wave:WaveV3Schema.default({intensity:.85,handHeight:.8,waveCount:2,wristAmplitude:.17,anticipation:.12,recovery:.28}),releaseFrames:z.number().int().min(16).max(32).default(24)}).strict().optional(),
   cameraShots:z.array(z.object({start:z.number().min(0),end:z.number().positive(),preset:z.enum(['wide','medium']),target:z.literal('wolf-warrior-native'),transition:z.enum(['cut','smooth']),transitionFrames:z.number().int().min(0).max(48)}).strict()).optional(),
   actions:z.array(z.discriminatedUnion('type',[
     z.object({...timing,type:z.literal('idle')}).strict(),

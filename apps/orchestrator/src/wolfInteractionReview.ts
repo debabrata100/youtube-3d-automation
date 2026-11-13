@@ -1,0 +1,10 @@
+import {randomUUID} from 'node:crypto';
+import {readFile} from 'node:fs/promises';
+import path from 'node:path';
+import {ROOT} from './utils/paths.js';
+import {createSceneWorkflow} from './scene/workflow.js';
+const jobDir=path.join(ROOT,'jobs','wolf-interaction-'+randomUUID());
+console.log('Interaction review job:',jobDir);
+const input=process.argv[2]?JSON.parse(await readFile(process.argv[2],'utf8')):undefined;
+await createSceneWorkflow().invoke({jobDir,input});
+console.log('Review artifacts:',jobDir);

@@ -6,10 +6,10 @@ from performance_math import smoother,foot_metrics
 from foot_contact import stance_pairs
 import wolf_native as native
 
-def wave_v3(rig,config,parameters):
+def wave_v3(rig,config,parameters,action_name='Wolf.Controller.Wave.v3'):
     names=config['rightArmControls']+['FK_Spine_02']
     if any(n not in rig.pose.bones or rig.pose.bones[n].constraints or rig.pose.bones[n].rotation_mode!='XYZ' for n in names):raise ValueError('Wave v3 requires verified unconstrained native XYZ controls')
-    action=bpy.data.actions.new('Wolf.Controller.Wave.v3');action.use_fake_user=True;rig.animation_data.action=action
+    action=bpy.data.actions.new(action_name);action.use_fake_user=True;rig.animation_data.action=action
     intensity=parameters['intensity'];height=parameters['handHeight'];anticipation=parameters['anticipation'];recover=parameters['recovery']
     def env(t,a,b,c,d):return smoother((t-a)/(b-a))*(1-smoother((t-c)/(d-c)))
     for frame in range(73):
